@@ -1,10 +1,9 @@
-import torch
+from PIL import Image
 
-print("CUDA available:", torch.cuda.is_available())
-print("CUDA version used by PyTorch:", torch.version.cuda)
-print("PyTorch version:", torch.__version__)
-
-if torch.cuda.is_available():
-    print("Number of GPUs:", torch.cuda.device_count())
-    print("Current GPU:", torch.cuda.current_device())
-    print("GPU Name:", torch.cuda.get_device_name(0))
+try:
+    img = Image.open('frames_cropped/celeb-real/train/id0_0000/frame0000.jpg')
+    img.show()
+except PermissionError as e:
+    print(f"PermissionError: {e}")
+except Exception as e:
+    print(f"An error occurred: {e}")
