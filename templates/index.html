@@ -235,6 +235,48 @@
                 height: 100px;
             }
         }
+        /* Feedback Section */
+#feedbackButtons {
+    margin-top: 20px;
+    display: flex;
+    justify-content: center;
+    gap: 20px;
+}
+
+#feedbackButtons button {
+    padding: 10px 20px;
+    font-size: 1rem;
+    font-weight: bold;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: transform 0.2s, background-color 0.3s, box-shadow 0.3s;
+}
+
+/* Correct Button */
+#feedbackButtons button:first-child {
+    background-color: #38a169; /* Green */
+    color: white;
+}
+
+#feedbackButtons button:first-child:hover {
+    background-color: #2f855a; /* Darker Green */
+    transform: scale(1.05);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+}
+
+/* Incorrect Button */
+#feedbackButtons button:last-child {
+    background-color: #e53e3e; /* Red */
+    color: white;
+}
+
+#feedbackButtons button:last-child:hover {
+    background-color: #c53030; /* Darker Red */
+    transform: scale(1.05);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+}
+
     </style>
 </head>
 <body>
@@ -262,6 +304,13 @@
         <div class="frame-gallery-container">
             <div id="detectedFacesGallery" class="frame-gallery"></div>
         </div>
+
+        <!-- Feedback Section -->
+        <h3>Is the Prediction Correct?</h3>
+        <div id="feedbackButtons">
+            <button onclick="submitFeedback('correct')">Correct</button>
+            <button onclick="submitFeedback('incorrect')">Incorrect</button>
+        </div>
     </div>
 
     <script>
@@ -274,6 +323,8 @@
         const averageFakeScoreEl = document.getElementById('averageFakeScore');
         const frameGallery = document.getElementById('frameGallery');
         const detectedFacesGallery = document.getElementById('detectedFacesGallery');
+        let currentVideoName = ''; // To track video name for feedback submission
+        let currentPrediction = ''; // To track model prediction for feedback
 
         // Custom file input label
         videoFile.addEventListener('change', function() {
@@ -333,6 +384,8 @@
 
                 // Display results
                 resultDiv.classList.add('show');
+                currentVideoName = data.video_name; // Store video name for feedback
+                currentPrediction = data.fake_decision_by_count ? 'fake' : 'real'; // Store prediction
 
                 // Set fake decision text
                 const fakeDecisionByCount = data.fake_decision_by_count ?
@@ -367,6 +420,35 @@
                 console.error('Error:', error);
                 loadingSpinner.style.display = 'none';
                 alert('An error occurred during video processing.');
+            });
+        }
+
+        function submitFeedback(feedback) {
+            if (!currentVideoName || !currentPrediction) {
+                alert('No video data available for feedback submission.');
+                return;
+            }
+
+            const feedbackData = {
+                video_name: currentVideoName,
+                model_prediction: currentPrediction,
+                user_feedback: feedback
+            };
+
+            fetch('/feedback', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(feedbackData)
+            })
+            .then(response => response.json())
+            .then(data => {
+                alert('Thank you for your feedback!');
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred while submitting feedback.');
             });
         }
     </script>

@@ -1,4 +1,5 @@
 import os
+import csv
 from flask import Flask, render_template, request, send_from_directory, jsonify
 import cv2
 import torch
@@ -6,13 +7,14 @@ from torchvision import transforms
 from PIL import Image
 from model import EfficientNetClassifier  # Import your model class
 import numpy as np
-
+import matplotlib.pyplot as plt
 app = Flask(__name__)
 
 # Paths
 output_video_frames_dir = "temp"  # Directory to save extracted frames
 output_cropped_frames_dir = "temp_frames"  # Directory to save cropped face frames
 model_path = "best_model.pth"  # Path to the saved model
+feedback_file = "feedback.csv"  # Path to store feedback
 
 # Load pre-trained DNN face detector
 dnn_model_path = r"C:/Users/naras/PycharmProjects/DeepFake_Detect/models/deploy.prototxt"
@@ -34,9 +36,17 @@ transform = transforms.Compose([
     transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
 ])
 
+# Ensure feedback file exists
+if not os.path.exists(feedback_file):
+    with open(feedback_file, mode='w', newline='') as file:
+        writer = csv.writer(file)
+        writer.writerow(["video_name", "model_prediction", "user_feedback"])  # Header
+
+
 @app.route('/')
 def index():
     return render_template('index.html')
+
 
 @app.route('/upload', methods=['POST'])
 def upload_video():
@@ -60,6 +70,23 @@ def upload_video():
         # Return the result as a JSON response
         return jsonify(result)
 
+
+@app.route('/feedback', methods=['POST'])
+def feedback():
+    # Get the feedback data from the user
+    data = request.json
+    video_name = data.get('video_name')
+    model_prediction = data.get('model_prediction')
+    user_feedback = data.get('user_feedback')
+
+    # Append feedback to the CSV file
+    with open(feedback_file, mode='a', newline='') as file:
+        writer = csv.writer(file)
+        writer.writerow([video_name, model_prediction, user_feedback])
+
+    return jsonify({"status": "success", "message": "Feedback saved!"})
+
+
 def convert_numpy_types(obj):
     if isinstance(obj, np.bool_):
         return bool(obj)
@@ -75,6 +102,7 @@ def convert_numpy_types(obj):
         return [convert_numpy_types(item) for item in obj]
     else:
         return obj  # Return other types unchanged
+
 
 def process_video(input_video_path, video_name):
     # Create output directories for the video
@@ -182,7 +210,8 @@ def process_video(input_video_path, video_name):
         "consistent_fake_frames": consistent_fake_frames,
         "average_fake_score": average_fake_score,
         "frame_paths": frame_paths,
-        "face_frame_paths": face_frame_paths
+        "face_frame_paths": face_frame_paths,
+        "video_name": video_name
     }
 
     return result
@@ -192,9 +221,11 @@ def process_video(input_video_path, video_name):
 def serve_temp_image(filename):
     return send_from_directory(output_video_frames_dir, filename)
 
+
 @app.route('/temp_frames/<path:filename>')
 def serve_temp_frames(filename):
     return send_from_directory(output_cropped_frames_dir, filename)
+
 
 if __name__ == '__main__':
     app.run(debug=True)
