@@ -1,0 +1,1 @@
+This project focuses on detecting deepfake images and videos using a machine learning model based on EfficientNet. The system is trained to differentiate between real and fake (deepfake) content, providing a probability score for each prediction.
