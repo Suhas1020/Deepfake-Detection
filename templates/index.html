@@ -17,8 +17,9 @@
             display: flex;
             justify-content: center;
             align-items: center;
-            height: 100vh;
+            min-height: 100vh;
             flex-direction: column;
+            padding: 20px;
         }
 
         h1 {
@@ -84,7 +85,7 @@
         #result {
             margin-top: 30px;
             width: 100%;
-            max-width: 500px;
+            max-width: 800px;
             background: #ffffff;
             border-radius: 10px;
             padding: 20px;
@@ -99,11 +100,16 @@
             opacity: 1;
         }
 
-        #result h2 {
+        #result h2, #result h3 {
             color: #2d3748;
             font-size: 1.8rem;
             margin-bottom: 15px;
             font-weight: bold;
+        }
+
+        #result h3 {
+            font-size: 1.4rem;
+            margin-top: 20px;
         }
 
         #result p {
@@ -115,6 +121,92 @@
         #result p span {
             font-weight: bold;
             color: #38a169;
+        }
+
+        /* Horizontal Scrollable Frame Gallery */
+        .frame-gallery-container {
+            width: 100%;
+            overflow-x: auto;
+            scrollbar-width: thin;
+            scrollbar-color: #888 #f1f1f1;
+        }
+
+        .frame-gallery {
+            display: flex;
+            gap: 15px;
+            padding: 15px;
+            overflow-x: scroll;
+            scroll-snap-type: x mandatory;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .frame-gallery::-webkit-scrollbar {
+            height: 8px;
+        }
+
+        .frame-gallery::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 10px;
+        }
+
+        .frame-gallery::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 10px;
+        }
+
+        .frame-gallery::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+
+        .frame-gallery .gallery-item {
+            flex: 0 0 auto;
+            scroll-snap-align: center;
+            position: relative;
+            transition: transform 0.3s ease;
+        }
+
+        .frame-gallery .gallery-item img {
+            width: 200px;
+            height: 150px;
+            object-fit: cover;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .frame-gallery .gallery-item:hover {
+            transform: scale(1.05);
+        }
+
+        .frame-gallery .gallery-item .overlay {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: rgba(0,0,0,0.5);
+            overflow: hidden;
+            width: 100%;
+            height: 0;
+            transition: 0.5s ease;
+        }
+
+        .frame-gallery .gallery-item:hover .overlay {
+            height: 30%;
+        }
+
+        .frame-gallery .gallery-item .overlay-text {
+            color: white;
+            font-size: 12px;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .frame-gallery .gallery-item:hover .overlay-text {
+            opacity: 1;
         }
 
         /* Loading Spinner */
@@ -138,27 +230,11 @@
         }
 
         @media (max-width: 600px) {
-            body {
-                padding: 10px;
-            }
-
-            h1 {
-                font-size: 2rem;
-            }
-
-            #uploadForm {
-                padding: 20px;
-            }
-
-            #result h2 {
-                font-size: 1.6rem;
-            }
-
-            #result p {
-                font-size: 1rem;
+            .frame-gallery .gallery-item img {
+                width: 150px;
+                height: 100px;
             }
         }
-
     </style>
 </head>
 <body>
@@ -176,57 +252,122 @@
         <p id="fakeDecision"></p>
         <p id="consistentFakeFrames"></p>
         <p id="averageFakeScore"></p>
+
+        <h3>Extracted Frames</h3>
+        <div class="frame-gallery-container">
+            <div id="frameGallery" class="frame-gallery"></div>
+        </div>
+
+        <h3>Detected Faces</h3>
+        <div class="frame-gallery-container">
+            <div id="detectedFacesGallery" class="frame-gallery"></div>
+        </div>
     </div>
 
     <script>
+        const videoFile = document.getElementById('videoFile');
+        const uploadForm = document.getElementById('uploadForm');
+        const resultDiv = document.getElementById('result');
+        const loadingSpinner = document.getElementById('loadingSpinner');
+        const fakeDecisionEl = document.getElementById('fakeDecision');
+        const consistentFakeFramesEl = document.getElementById('consistentFakeFrames');
+        const averageFakeScoreEl = document.getElementById('averageFakeScore');
+        const frameGallery = document.getElementById('frameGallery');
+        const detectedFacesGallery = document.getElementById('detectedFacesGallery');
+
+        // Custom file input label
+        videoFile.addEventListener('change', function() {
+            const label = uploadForm.querySelector('label');
+            label.textContent = this.files[0] ? this.files[0].name : 'Choose a Video File';
+        });
+
+        function createGalleryItem(src, alt, index) {
+            const galleryItem = document.createElement('div');
+            galleryItem.classList.add('gallery-item');
+
+            const img = document.createElement('img');
+            img.src = src;
+            img.alt = alt;
+
+            const overlay = document.createElement('div');
+            overlay.classList.add('overlay');
+
+            const overlayText = document.createElement('div');
+            overlayText.classList.add('overlay-text');
+            overlayText.textContent = `Frame ${index + 1}`;
+
+            overlay.appendChild(overlayText);
+            galleryItem.appendChild(img);
+            galleryItem.appendChild(overlay);
+
+            return galleryItem;
+        }
+
         function uploadVideo() {
-            const videoFile = document.getElementById('videoFile').files[0];
-            if (!videoFile) {
-                alert('Please select a video file to upload.');
+            if (!videoFile.files.length) {
+                alert('Please select a video file first.');
                 return;
             }
 
+            // Reset previous results
+            resultDiv.classList.remove('show');
+            frameGallery.innerHTML = '';
+            detectedFacesGallery.innerHTML = '';
+
             // Show loading spinner
-            document.getElementById('loadingSpinner').style.display = 'block';
+            loadingSpinner.style.display = 'block';
 
+            // Prepare form data
             const formData = new FormData();
-            formData.append("video", videoFile);
+            formData.append('video', videoFile.files[0]);
 
+            // Send upload request
             fetch('/upload', {
                 method: 'POST',
                 body: formData
             })
             .then(response => response.json())
             .then(data => {
-                // Hide loading spinner and display results
-                document.getElementById('loadingSpinner').style.display = 'none';
-                displayResults(data);
+                // Hide loading spinner
+                loadingSpinner.style.display = 'none';
+
+                // Display results
+                resultDiv.classList.add('show');
+
+                // Set fake decision text
+                const fakeDecisionByCount = data.fake_decision_by_count ?
+                    '<span style="color: red;">Likely Deepfake (by frame count)</span>' :
+                    '<span style="color: green;">Likely Real (by frame count)</span>';
+
+                const fakeDecisionByTemporal = data.fake_decision_by_temporal ?
+                    '<span style="color: red;">Likely Deepfake (by temporal analysis)</span>' :
+                    '<span style="color: green;">Likely Real (by temporal analysis)</span>';
+
+                fakeDecisionEl.innerHTML = `Deepfake Detection: ${fakeDecisionByCount} / ${fakeDecisionByTemporal}`;
+                consistentFakeFramesEl.innerHTML = `Consistent Fake Frames: <span>${data.consistent_fake_frames}</span>`;
+                averageFakeScoreEl.innerHTML = `Average Fake Score: <span>${(data.average_fake_score * 100).toFixed(2)}%</span>`;
+
+                // Display extracted frames with hover effect
+                data.frame_paths.forEach((framePath, index) => {
+                    const galleryItem = createGalleryItem(framePath, 'Extracted Frame', index);
+                    frameGallery.appendChild(galleryItem);
+                });
+
+                // Display detected faces with hover effect
+                let faceIndex = 0;
+                data.face_frame_paths.forEach(framefaces => {
+                    framefaces.forEach(facePath => {
+                        const galleryItem = createGalleryItem(facePath, 'Detected Face', faceIndex);
+                        detectedFacesGallery.appendChild(galleryItem);
+                        faceIndex++;
+                    });
+                });
             })
             .catch(error => {
-                // Hide loading spinner and show error message
-                document.getElementById('loadingSpinner').style.display = 'none';
-                console.error("Error uploading video:", error);
-                alert('Error uploading video. Please try again.');
+                console.error('Error:', error);
+                loadingSpinner.style.display = 'none';
+                alert('An error occurred during video processing.');
             });
-        }
-
-        function displayResults(data) {
-            const fakeDecision = document.getElementById('fakeDecision');
-            const consistentFakeFrames = document.getElementById('consistentFakeFrames');
-            const averageFakeScore = document.getElementById('averageFakeScore');
-            const resultDiv = document.getElementById('result');
-
-            // Show the results section
-            resultDiv.classList.add('show');
-
-            if (data.fake_decision_by_count || data.fake_decision_by_temporal) {
-                fakeDecision.textContent = "The video is classified as FAKE.";
-            } else {
-                fakeDecision.textContent = "The video is classified as REAL.";
-            }
-
-            consistentFakeFrames.textContent = `Consistent frames classified as fake: ${data.consistent_fake_frames}`;
-            averageFakeScore.textContent = `Average fake score over the video: ${data.average_fake_score.toFixed(2)}`;
         }
     </script>
 </body>

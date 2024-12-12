@@ -34,11 +34,9 @@ transform = transforms.Compose([
     transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
 ])
 
-
 @app.route('/')
 def index():
     return render_template('index.html')
-
 
 @app.route('/upload', methods=['POST'])
 def upload_video():
@@ -61,7 +59,6 @@ def upload_video():
 
         # Return the result as a JSON response
         return jsonify(result)
-
 
 def convert_numpy_types(obj):
     if isinstance(obj, np.bool_):
@@ -100,6 +97,8 @@ def process_video(input_video_path, video_name):
     total_faces_detected = 0
 
     frame_results = []
+    frame_paths = []  # New list to store frame paths
+    face_frame_paths = []  # New list to store face frame paths
 
     while True:
         ret, frame = cap.read()
@@ -115,6 +114,7 @@ def process_video(input_video_path, video_name):
         # Save the current frame to the corresponding video folder
         frame_filename = os.path.join(video_frames_dir, f"frame_{processed_frame_count:04d}.jpg")
         cv2.imwrite(frame_filename, frame)
+        frame_paths.append(f"/temp/{video_name}/frame_{processed_frame_count:04d}.jpg")
 
         # Prepare the frame for DNN detection
         h, w = frame.shape[:2]
@@ -125,6 +125,7 @@ def process_video(input_video_path, video_name):
         # Detect faces and crop
         frame_is_fake = False
         frame_fake_scores = []
+        frame_faces = []  # New list to store face frame paths for this frame
         for i in range(detections.shape[2]):
             confidence = detections[0, 0, i, 2]
             if confidence > 0.5:  # Confidence threshold
@@ -137,6 +138,7 @@ def process_video(input_video_path, video_name):
                 cropped_face_filename = os.path.join(cropped_frames_dir,
                                                      f"frame_{processed_frame_count:04d}_face_{i + 1}.jpg")
                 cv2.imwrite(cropped_face_filename, cropped_face)
+                frame_faces.append(f"/temp_frames/{video_name}/frame_{processed_frame_count:04d}_face_{i + 1}.jpg")
 
                 # Predict whether the face is real or fake
                 total_faces_detected += 1
@@ -156,6 +158,7 @@ def process_video(input_video_path, video_name):
 
         frame_results.append(
             (processed_frame_count, frame_is_fake, np.mean(frame_fake_scores) if frame_fake_scores else 0.0))
+        face_frame_paths.append(frame_faces)
 
     cap.release()
 
@@ -177,11 +180,21 @@ def process_video(input_video_path, video_name):
         "fake_decision_by_count": fake_decision_by_count,
         "fake_decision_by_temporal": fake_decision_by_temporal,
         "consistent_fake_frames": consistent_fake_frames,
-        "average_fake_score": average_fake_score
+        "average_fake_score": average_fake_score,
+        "frame_paths": frame_paths,
+        "face_frame_paths": face_frame_paths
     }
 
     return result
 
+
+@app.route('/temp/<path:filename>')
+def serve_temp_image(filename):
+    return send_from_directory(output_video_frames_dir, filename)
+
+@app.route('/temp_frames/<path:filename>')
+def serve_temp_frames(filename):
+    return send_from_directory(output_cropped_frames_dir, filename)
 
 if __name__ == '__main__':
     app.run(debug=True)
